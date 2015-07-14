@@ -197,17 +197,25 @@ func (r *HipacheAdapter) doHipacheServiceDeRegister(service *bridge.Service, omi
 		if res < 1 {
 			log.Print("hipache: that's odd -- the backend is already deregged: ", rediskey, target)
 		}
+		remlen, err := redis.Int64(conn.Do("LLEN", rediskey))
+		if err != nil {
+			return err
+		}
+
 		if !omitdc && r.consul != nil { // for ONE of the dereg runs, if we are now empty, detag.
-			res, err := redis.Int64(conn.Do("LLEN", rediskey))
-			if err != nil {
-				return err
-			}
-			if res < 2 { // only the identifier is left, or something really killed the key
+			if remlen < 2 { // only the identifier is left, or something really killed the key
 				log.Print("all entries for frontend removed, detagging", rediskey)
 				err = r.doConsulUnTagging(service)
 				if err != nil {
 					return err
 				}
+			}
+		}
+		if remlen < 2 { // key is done, nuke it
+			log.Print("all entries for frontend removed, removing key", rediskey)
+			_, err = conn.Do("DEL", rediskey)
+			if err != nil {
+				return err
 			}
 		}
 	} else { // frontend key does not exist
@@ -272,6 +280,7 @@ func (r *HipacheAdapter) doConsulTagging(service *bridge.Service) error {
 	_, found = locate(svc.Tags, mytag)
 	if !found {
 		svc.Tags = append(svc.Tags, mytag)
+		log.Print("hipache: adding tag to consul:", ConsulName, "/", mytag, "/", svc.Tags)
 		return updateConsulTags(agent, svc)
 	}
 	return nil
@@ -298,6 +307,11 @@ func (r *HipacheAdapter) doConsulUnTagging(service *bridge.Service) error {
 }
 
 func (r *HipacheAdapter) Register(service *bridge.Service) error {
+	_, found := service.Attrs["hipache_expose"]
+	if !found {
+		log.Print("hipache: ignoring service with attrs", service.Attrs)
+		return nil
+	}
 	err := r.doHipacheServiceRegister(service, false) // register fullname
 	if err != nil {
 		log.Print("hipache: ERROR: ", err)
@@ -319,6 +333,10 @@ func (r *HipacheAdapter) Register(service *bridge.Service) error {
 }
 
 func (r *HipacheAdapter) Deregister(service *bridge.Service) error {
+	_, found := service.Attrs["hipache_expose"]
+	if !found {
+		return nil
+	}
 	err := r.doHipacheServiceDeRegister(service, false) // register fullname
 	if err != nil {
 		log.Print("hipache: ERROR: ", err)

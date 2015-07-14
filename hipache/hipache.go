@@ -7,6 +7,7 @@ import (
 	"errors"
 	"log"
 	"net/url"
+	"os"
 	"strconv"
 	"strings"
 	"time"
@@ -53,9 +54,15 @@ func (f *Factory) New(uri *url.URL) bridge.RegistryAdapter {
 		domain = uri.Path[1:]
 	}
 
+	// got overridden consul ip?
+	consultarget := os.Getenv("REGISTRATOR_HIPACHECONSUL_IP")
+	if consultarget == "" {
+		consultarget = "172.17.42.1:8500"
+	}
+
 	// find consul?
 	config := consulapi.DefaultConfig()
-	config.Address = "172.17.42.1:8500"
+	config.Address = consultarget
 	consulclient, err := consulapi.NewClient(config)
 	if err != nil {
 		log.Print("hipache: consul setup error: ", err)

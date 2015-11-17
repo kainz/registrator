@@ -1,6 +1,13 @@
 # Change Log
 All notable changes to this project will be documented in this file.
 
+# Rdio internal
+Added a hipache+consul adapter to allow plugging docker containers into a
+hipache backend, and tagging its consul service respectively.
+
+We currently hardcode the target consul instance as 172.17.42.1:8500, which is
+usually the docker bridge address.
+
 ## [Unreleased][unreleased]
 ### Fixed
 
